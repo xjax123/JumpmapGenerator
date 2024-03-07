@@ -1,59 +1,73 @@
-class UStar {
-    PVector pos;
-    int radius;
-    color col;
-    List<UStar> neighbors;
-    
-    public UStar(int x, int y, int r, color col) {
-        this.pos = new PVector(x,y);
-        this.radius = r;
-        this.col = col;
-        neighbors = new ArrayList<UStar>();
+class UStar extends UIBody{
+    float radius;
+
+    public UStar(PVector pos, PShape design, float radius) {
+        super(pos,design,new Touchbox());
+        this.radius = radius;
     }
     public UStar() {
-        this.pos = new PVector(0,0);
-        this.radius = 0;
-        this.col = color(0,0,0);
-        neighbors = new ArrayList<UStar>();
+        super(new PVector(0,0),createShape(),new Touchbox());
     }
 
-    public PVector pos() {
-        return pos;
-    }
-
-    public int posX() {
-        return (int) pos.x;
-    }
-
-    public int posY() {
-        return (int) pos.y;
-    }
-
-    public int radius() {
+    public float radius() {
         return radius;
     }
 
-    public color col() {
-        return col;
-    }
-    
     @Override
-    public String toString() {
-      return "[ x:"+pos.x+"y:"+pos.y+" rad:"+radius+"]";
+    public boolean inBounds(float x, float y) {
+        float u = distance(x,pos.x,y,pos.y);
+        if (u < radius()/2) {return true;}
+        return false;
+    }  
+
+    public void onClick(float x, float y) {
+        held = true;
+        if (mode == editMode.DELETE) {
+            if (mousePressed && (mouseButton == LEFT)) {
+                starmap.removeStar(this);
+            }
+        } else if (mode == editMode.SELECT) {
+            if (mousePressed && (mouseButton == LEFT)) {
+                selected = this;
+            }
+        } else if (mode == editMode.ADD) {
+            if (mousePressed && (mouseButton == RIGHT)) {
+                if (this != selectedStar && selectedStar != null) {
+                    starmap.addConnection(this, selectedStar, color(255),Math.round(sizeSlider.getVal()));
+                    selectedStar = null;
+                    type = editType.STAR; 
+                } else {
+                    type = editType.CONNECTION; 
+                    selectedStar = this;
+                }
+            }
+        } 
+    }
+    public void onHold(float x, float y) {
+        if (mode == editMode.SELECT && held) {
+            if (mousePressed && (mouseButton == LEFT)) {
+                this.pos = new PVector(x,y);
+            }   
+        }
+    }
+    public void onRelease(float x, float y) {
+        held = false;
     }
 }
 
-class Connection { 
+class Connection implements Renderable{ 
     UStar pos1;
     UStar pos2;
     float dist;
     color col;
+    float laneThickness;
 
-    public Connection(UStar p1, UStar p2, color col) {
+    public Connection(UStar p1, UStar p2, color col, float laneThickness) {
         this.col = col;
         pos1 = p1;
         pos2 = p2;
         dist = distance(p1.posX(),p2.posX(),p1.posY(),p2.posY());
+        this.laneThickness = laneThickness;
     }
 
     public UStar getFirstStar() {
@@ -101,6 +115,33 @@ class Connection {
         }
         return false;
     }
+
+    public void onClick() {
+        if (mode == editMode.DELETE) {
+            if (mousePressed && (mouseButton == RIGHT)) {
+                starmap.removeConnection(this);
+            }
+        }
+        if (mode == editMode.SELECT) {
+            if (mousePressed && (mouseButton == RIGHT)) {
+                selected = this;
+            }
+        }
+    }
+    public boolean clicked(float x, float y, float w) {
+        PVector A = pos1.pos();
+        PVector B = pos2.pos();
+        return isOnLine(A,B,new PVector(x,y),w);
+    }
+
+    public void render(PGraphics buffer) {
+        buffer.stroke(col());
+        buffer.strokeWeight(laneThickness);
+        buffer.line(getPos1().x,getPos1().y,getPos2().x,getPos2().y);
+    }
+    public void render() {
+
+    }
 }
 
 class StarMap {
@@ -108,14 +149,14 @@ class StarMap {
     private List<Connection> jump;
 
     public StarMap() {
-        starMap = new ArrayList<UStar>();
-        jump = new ArrayList<Connection>();
+        starMap = new CopyOnWriteArrayList<UStar>();
+        jump = new CopyOnWriteArrayList<Connection>();
     }
-    public StarMap(List<UStar> list) {
+    public StarMap(CopyOnWriteArrayList<UStar> list) {
         starMap = list;
-        jump = new ArrayList<Connection>();
+        jump = new CopyOnWriteArrayList<Connection>();
     }
-    public StarMap(List<UStar> list, List<Connection> conn) {
+    public StarMap(CopyOnWriteArrayList<UStar> list, CopyOnWriteArrayList<Connection> conn) {
         starMap = list;
         jump = conn;
     }
@@ -193,15 +234,16 @@ class StarMap {
     }
 
     public void addConnection(UStar one, UStar two) {
-        addConnection(one, two, color(255));
+        addConnection(one, two, color(255),jumplaneThickness);
     }
-    public void addConnection(UStar one, UStar two, color col) {
+    public void addConnection(UStar one, UStar two, color col, float thickness) {
         if (!jumpMatch(one,two)) {
-            jump.add(new Connection(one, two, col));
+            jump.add(new Connection(one, two, col,thickness));
         }
     }
     public void removeConnection(Connection c) {
         jump.remove(c);
+        stateChanged = true;
     }
 
     public List<Connection> getJumpLanes() {
@@ -216,7 +258,53 @@ class StarMap {
         return starMap.size();
     }
 
+    public void removeStar(UStar s) {
+        for (Connection c : jump) {
+            if (s == c.getFirstStar() || s == c.getSecondStar()) { 
+                removeConnection(c);
+            }
+        }
+        starMap.remove(s);
+        stateChanged = true;
+    }
+
     public UStar retrieve(int index) {
         return starMap.get(index);
+    }
+
+    public void registerClick(float x, float y, float width) {
+        for (UStar ui : starMap) {
+            if (ui.inBounds(x,y)) {
+                ui.onClick(x,y);
+            }
+        }
+        for (Connection conn : jump) {
+            if (conn.clicked(x,y,width+0.5)) {
+                conn.onClick();
+            }
+        }
+    }
+    public void registerHold(float x, float y) {
+        for (UStar ui : starMap) {
+            ui.onHold(x,y);
+        }
+    }
+    public void registerRelease(float x, float y) {
+        for (UStar ui : starMap) {
+            ui.onRelease(x,y);
+        }
+    }
+    public void render(PGraphics buffer) {
+        for (Connection c : jump) {
+            c.render(buffer);
+        }
+        for (UStar s : starMap) {
+            s.render(buffer);
+        }
+    }
+    public void clear() {
+        for (UStar star : starMap) {
+            removeStar(star);
+        }
     }
 }

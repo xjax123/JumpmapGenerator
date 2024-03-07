@@ -2,11 +2,8 @@ public float normalize(float val, float min, float max) {
     return (val - min)/(max - min);
 }
 
-public float distance(int x1, int x2, int y1, int y2) {
-    int xd = x1 - x2;
-    int yd = y1 - y2;
-    float dist = (float) Math.sqrt(xd*xd + yd*yd);
-    return dist;
+public float distance(float x1, float x2, float y1, float y2) {
+    return (float) Math.sqrt(Math.pow(x2-x1,2)+Math.pow(y2-y1,2));
 }
 
 public float clamp(float val, float min, float max) {
@@ -31,7 +28,7 @@ public float shunt(float val, float min, float max) {
     return temp;
 }
 
-static boolean onSegment(PVector p, PVector q, PVector r) 
+boolean onSegment(PVector p, PVector q, PVector r) 
 { 
     if (q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && 
         q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y)) 
@@ -40,50 +37,80 @@ static boolean onSegment(PVector p, PVector q, PVector r)
     return false; 
 } 
   
-// To find orientation of ordered triplet (p, q, r). 
-// The function returns following values 
-// 0 --> p, q and r are collinear 
-// 1 --> Clockwise 
-// 2 --> Counterclockwise 
-static float orientation(PVector p, PVector q, PVector r) 
+
+float orientation(PVector p, PVector q, PVector r) 
 { 
-    // See https://www.geeksforgeeks.org/orientation-3-ordered-points/ 
-    // for details of below formula. 
-    float val = (q.y - p.y) * (r.x - q.x) - 
-            (q.x - p.x) * (r.y - q.y); 
-  
-    if (val == 0) return 0; // collinear 
-  
-    return (val > 0)? 1: 2; // clock or counterclock wise 
+    float val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y); 
+    if (val == 0) return 0;
+    return (val > 0)? 1: 2;
 } 
-  
-// The main function that returns true if line segment 'p1q1' 
-// and 'p2q2' intersect. 
-static boolean doIntersect(PVector p1, PVector q1, PVector p2, PVector q2) 
+   
+boolean doIntersect(PVector p1, PVector q1, PVector p2, PVector q2) 
 { 
-    // Find the four orientations needed for general and 
-    // special cases 
     float o1 = orientation(p1, q1, p2); 
     float o2 = orientation(p1, q1, q2); 
     float o3 = orientation(p2, q2, p1); 
     float o4 = orientation(p2, q2, q1); 
-  
-    // General case 
-    if (o1 != o2 && o3 != o4) 
-        return true; 
-  
-    // Special Cases 
-    // p1, q1 and p2 are collinear and p2 lies on segment p1q1 
+
+    if (o1 != o2 && o3 != o4) return true; 
     if (o1 == 0 && onSegment(p1, p2, q1)) return true; 
-  
-    // p1, q1 and q2 are collinear and q2 lies on segment p1q1 
     if (o2 == 0 && onSegment(p1, q2, q1)) return true; 
-  
-    // p2, q2 and p1 are collinear and p1 lies on segment p2q2 
     if (o3 == 0 && onSegment(p2, p1, q2)) return true; 
-  
-    // p2, q2 and q1 are collinear and q1 lies on segment p2q2 
     if (o4 == 0 && onSegment(p2, q1, q2)) return true; 
   
-    return false; // Doesn't fall in any of the above cases 
+    return false;
 } 
+  boolean isOnLine(PVector v0, PVector v1, PVector p, float w) {
+    // Return minimum distance between line segment vw and point p
+    PVector vp = new PVector();
+    PVector line = PVector.sub(v1, v0);
+    float l2 = line.magSq();  // i.e. |w-v|^2 -  avoid a sqrt
+    if (l2 == 0.0) {
+      vp.set(v0);
+      return false;
+    }
+    PVector pv0_line = PVector.sub(p, v0);
+    float t = pv0_line.dot(line)/l2;
+    pv0_line.normalize();
+    vp.set(line);
+    vp.mult(t);
+    vp.add(v0);
+    float d = PVector.dist(p, vp);
+    if (t >= 0 && t <= 1 && d <= w)
+      return true;
+    else
+      return false;
+  }
+
+float vecDot(PVector v1, PVector v2) {
+    float x = v1.x*v2.x;
+    float y = v1.y*v2.y;
+    return x+y;
+}
+PVector vecAdd(PVector v1, PVector v2) {
+    return new PVector(v1.x+v2.x,v1.y+v2.y);
+}
+PVector vecSub(PVector v1, PVector v2) {
+    return new PVector(v1.x-v2.x,v1.y-v2.y);
+}
+PVector vecMulti(PVector v1, PVector v2) {
+    return new PVector(v1.x*v2.x,v1.y*v2.y);
+}
+PVector vecDiv(PVector v1, PVector v2) {
+    return new PVector(v1.x/v2.x,v1.y/v2.y);
+}
+PVector vecScalarAdd(PVector v, float s) {
+    return new PVector(v.x+s,v.y+s);
+}
+PVector vecScalarSub(PVector v, float s) {
+    return new PVector(v.x-s,v.y-s);
+}
+PVector vecScalarMulti(PVector v, float s) {
+    return new PVector(v.x*s,v.y*s);
+}
+PVector vecScalarDiv(PVector v, float s) {
+    return new PVector(v.x/s,v.y/s);
+}
+PVector vecPow (PVector v, float power) {
+    return new PVector((float) Math.pow(v.x,power), (float) Math.pow(v.y,power));
+}
